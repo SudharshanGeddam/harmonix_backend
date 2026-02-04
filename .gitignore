@@ -8,3 +8,6 @@ secrets/
 config/secrets.json
 credentials.json
 private_key.pem
+
+# Local readme
+LIBRARY_DOCUMENTATION.md
