@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_supabase_client
-from app.routers import auth, packages, receipts
+from app.routers import auth, packages, receipts, dashboard
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -51,6 +51,7 @@ async def root():
 app.include_router(auth.router)
 app.include_router(packages.router)
 app.include_router(receipts.router)
+app.include_router(dashboard.router)
 
 
 if __name__ == "__main__":
