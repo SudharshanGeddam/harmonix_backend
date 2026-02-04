@@ -22,8 +22,13 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup():
-    """Initialize Supabase client on startup."""
-    init_supabase_client()
+    """Initialize Supabase client on startup if available."""
+    try:
+        init_supabase_client()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to initialize Supabase client: {e}. Database operations will be unavailable.")
 
 # Configure CORS middleware
 app.add_middleware(
@@ -47,11 +52,11 @@ async def root():
     return {"status": "Backend running"}
 
 
-# Register routers
-app.include_router(auth.router)
-app.include_router(packages.router)
-app.include_router(receipts.router)
-app.include_router(dashboard.router)
+# Register routers with /api prefix
+app.include_router(auth.router, prefix="/api")
+app.include_router(packages.router, prefix="/api")
+app.include_router(receipts.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 
 
 if __name__ == "__main__":

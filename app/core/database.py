@@ -4,11 +4,22 @@ Database client initialization with Supabase integration.
 This module manages the Supabase client for database operations.
 """
 
-from typing import Optional
-
-from supabase import Client, create_client
+import logging
+from typing import Optional, Any
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Attempt to import Supabase, handle missing dependencies gracefully
+try:
+    from supabase import Client, create_client
+    SUPABASE_AVAILABLE = True
+except ModuleNotFoundError as e:
+    logger.warning(f"Supabase not available: {e}. Database operations will fail.")
+    SUPABASE_AVAILABLE = False
+    Client = Any  # type: ignore
+    create_client = None  # type: ignore
 
 
 def _validate_supabase_credentials() -> tuple[str, str]:
@@ -48,12 +59,18 @@ def get_supabase_client() -> Client:
         Initialized Supabase client
 
     Raises:
-        ValueError: If Supabase credentials are not configured
+        ValueError: If Supabase credentials are not configured or Supabase is not available
 
     Example:
         client = get_supabase_client()
         response = await client.table("users").select("*").execute()
     """
+    if not SUPABASE_AVAILABLE:
+        raise RuntimeError(
+            "Supabase client is not available due to missing dependencies (pyroaring). "
+            "Please install the full requirements or configure Supabase properly."
+        )
+    
     url, key = _validate_supabase_credentials()
     return create_client(url, key)
 
