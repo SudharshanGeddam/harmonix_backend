@@ -1,7 +1,7 @@
 """
 Receipts router for managing ethical receipt data using Supabase.
 
-Implements CRUD operations for receipts.
+Implements CRUD operations for receipts with harm score calculation.
 """
 
 import logging
@@ -16,6 +16,7 @@ from app.schemas.receipts import (
     ReceiptStatus,
     ReceiptsListResponse,
 )
+from app.services.harm_score import HarmScoreCalculator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/receipts", tags=["receipts"])
@@ -76,19 +77,22 @@ async def list_receipts():
 )
 async def create_receipt(request: ReceiptCreate):
     """
-    Create a new receipt.
+    Create a new receipt with harm score calculation.
 
     Args:
-        request: Receipt creation data
+        request: Receipt creation data with optional disaster_type
 
     Returns:
-        ReceiptResponse with created receipt
+        ReceiptResponse with created receipt and calculated harm_score
 
     Raises:
         HTTPException: If receipt creation fails
     """
     try:
         client = get_supabase_client()
+
+        # Calculate harm score from disaster type
+        harm_score = HarmScoreCalculator.calculate(request.disaster_type)
 
         # Prepare receipt data
         receipt_data = {
@@ -107,6 +111,15 @@ async def create_receipt(request: ReceiptCreate):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create receipt",
             )
+
+        # Add harm_score to response (calculated, not from DB)
+        created_receipt = response.data[0]
+        created_receipt["harm_score"] = harm_score
+
+        logger.info(
+            f"Created receipt {request.receipt_id} "
+            f"(disaster={request.disaster_type}, harm_score={harm_score})"
+        )
 
         created_receipt = response.data[0]
         return ReceiptResponse(**created_receipt)
