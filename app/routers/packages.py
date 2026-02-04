@@ -2,7 +2,7 @@
 Packages router for managing package data using Supabase.
 
 Implements CRUD operations for packages with urgency-based prioritization
-and automatic category detection.
+and signal-based category detection.
 """
 
 import logging
@@ -14,6 +14,7 @@ from app.core.database import get_supabase_client
 from app.schemas.packages import (
     PackageCreate,
     PackageCategoryUpdate,
+    PackageProcessSignals,
     PackageResponse,
     PackageStatus,
     PackageUpdate,
@@ -21,6 +22,7 @@ from app.schemas.packages import (
 )
 from app.services.category_detector import CategoryDetector
 from app.services.priority_engine import PriorityEngine
+from app.services.zk_verifier import ZKVerifier
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/packages", tags=["packages"])
@@ -211,23 +213,30 @@ async def update_package(package_uuid: str, request: PackageUpdate):
     "/{package_uuid}/process",
     response_model=PackageResponse,
     status_code=status.HTTP_200_OK,
-    summary="Process Package for Category and Priority",
+    summary="Process Package with Structured Signals",
 )
-async def process_package(package_uuid: str):
+async def process_package(
+    package_uuid: str, signals: PackageProcessSignals
+):
     """
-    Process package: detect category from description and compute priority.
+    Process package: accept structured signals, verify claims, detect category, compute priority.
 
     Workflow:
-    1. Fetch package by id
-    2. Run category detection on description
-    3. If category detected:
+    1. Accept structured signals (weight, fragile, sender_type, zk_verified_sender)
+    2. If claimed_product_type provided:
+       - Run ZK verification
+       - Set zk_verified_sender based on verification result
+    3. Save signals to the package (claimed_product_type NOT stored for privacy)
+    4. Run category detection
+    5. If category detected:
        - Compute priority_label
-       - Update category and priority_label
-    4. If not detected:
-       - Leave both as null
+    6. Save category and priority_label
+    7. Return updated package
 
     Args:
         package_uuid: Package UUID
+        signals: Structured signal data for category detection
+                 (includes optional claimed_product_type for ZK verification)
 
     Returns:
         PackageResponse with updated package
@@ -250,18 +259,41 @@ async def process_package(package_uuid: str):
             )
 
         package = fetch_response.data[0]
+        urgency = package.get("urgency")
 
-        # Detect category from description
-        detected_category = CategoryDetector.detect(package.get("description"))
+        # Determine ZK verification status
+        zk_verified_sender = signals.zk_verified_sender
+        if signals.claimed_product_type:
+            # Run ZK verification on the claimed product type
+            # This determines if the sender's claim is verified
+            zk_verified_sender = ZKVerifier.verify(signals.claimed_product_type)
+
+        # Prepare signal data for storage
+        # NOTE: claimed_product_type is NOT stored to preserve privacy
+        signal_data = {
+            "weight": signals.weight,
+            "fragile": signals.fragile,
+            "sender_type": signals.sender_type.value if signals.sender_type else None,
+            "zk_verified_sender": zk_verified_sender,
+        }
+
+        # Detect category from structured signals
+        detected_category = CategoryDetector.detect(
+            urgency=urgency,
+            weight=signals.weight,
+            fragile=signals.fragile,
+            sender_type=signals.sender_type.value if signals.sender_type else None,
+            zk_verified_sender=zk_verified_sender,
+        )
 
         # Compute priority_label if category is detected
         priority_label = None
         if detected_category:
-            urgency = package.get("urgency")
             priority_label = PriorityEngine.compute(urgency, detected_category)
 
-        # Prepare update data
+        # Prepare complete update data
         update_data = {
+            **signal_data,
             "category": detected_category,
             "priority_label": priority_label,
             "last_updated": datetime.utcnow().isoformat(),

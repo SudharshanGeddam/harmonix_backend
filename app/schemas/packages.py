@@ -43,6 +43,17 @@ class PackagePriority(str, Enum):
     LOW = "low"
 
 
+class SenderType(str, Enum):
+    """Valid sender type values."""
+
+    HOSPITAL = "hospital"
+    NGO = "ngo"
+    GOVT = "govt"
+    RETAIL = "retail"
+    LUXURY = "luxury"
+    WAREHOUSE = "warehouse"
+
+
 class PackageCreate(BaseModel):
     """Request model for creating a new package."""
 
@@ -51,7 +62,7 @@ class PackageCreate(BaseModel):
     status: PackageStatus = Field(..., description="Package status")
     urgency: PackageUrgency = Field(..., description="Package urgency level")
     description: Optional[str] = Field(
-        None, description="Package description for category detection"
+        None, description="Package description (for backward compatibility)"
     )
 
     @field_validator("description")
@@ -61,6 +72,26 @@ class PackageCreate(BaseModel):
         if v is not None and isinstance(v, str) and v.strip() == "":
             return None
         return v
+
+
+class PackageProcessSignals(BaseModel):
+    """Request model for processing package with structured signals."""
+
+    weight: Optional[float] = Field(
+        None, ge=0, description="Package weight in kg"
+    )
+    fragile: Optional[bool] = Field(
+        None, description="Whether package is fragile"
+    )
+    sender_type: Optional[SenderType] = Field(
+        None, description="Type of sender"
+    )
+    zk_verified_sender: Optional[bool] = Field(
+        None, description="Whether sender is ZK-verified"
+    )
+    claimed_product_type: Optional[str] = Field(
+        None, description="Claimed product type for ZK verification (not stored)"
+    )
 
 
 class PackageUpdate(BaseModel):
@@ -84,6 +115,12 @@ class PackageResponse(BaseModel):
     status: PackageStatus = Field(..., description="Package status")
     urgency: PackageUrgency = Field(..., description="Package urgency level")
     description: Optional[str] = Field(None, description="Package description")
+    weight: Optional[float] = Field(None, description="Package weight in kg")
+    fragile: Optional[bool] = Field(None, description="Whether package is fragile")
+    sender_type: Optional[str] = Field(None, description="Type of sender")
+    zk_verified_sender: Optional[bool] = Field(
+        None, description="Whether sender is ZK-verified"
+    )
     category: Optional[str] = Field(
         None, description="Detected or manual package category"
     )
