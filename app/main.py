@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_supabase_client
+from app.routers import auth
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -46,8 +47,8 @@ async def root():
     return {"status": "Backend running"}
 
 
-# Register routers here (currently empty)
-# Example: app.include_router(router_name, prefix="/api/v1")
+# Register routers
+app.include_router(auth.router)
 
 
 if __name__ == "__main__":
