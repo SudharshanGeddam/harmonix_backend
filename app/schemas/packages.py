@@ -113,7 +113,7 @@ class PackageResponse(BaseModel):
     package_id: str = Field(..., description="Unique package identifier")
     destination: str = Field(..., description="Delivery destination")
     status: PackageStatus = Field(..., description="Package status")
-    urgency: PackageUrgency = Field(..., description="Package urgency level")
+    urgency: Optional[PackageUrgency] = Field(None, description="Package urgency level")
     description: Optional[str] = Field(None, description="Package description")
     weight: Optional[float] = Field(None, description="Package weight in kg")
     fragile: Optional[bool] = Field(None, description="Whether package is fragile")
