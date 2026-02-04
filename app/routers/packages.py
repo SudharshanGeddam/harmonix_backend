@@ -148,6 +148,12 @@ async def create_package(request: PackageCreate):
         )
 
 
+@router.post(
+    "/{package_uuid}",
+    response_model=PackageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Package Status",
+)
 @router.patch(
     "/{package_uuid}",
     response_model=PackageResponse,
@@ -171,9 +177,16 @@ async def update_package(package_uuid: str, request: PackageUpdate):
     try:
         client = get_supabase_client()
 
+        # If no status provided, check if this might be a process payload sent to wrong endpoint
+        if request.status is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Status field is required. Valid values: in_transit, delivered, delayed. Did you mean to call POST/PATCH /packages/{id}/process for signal processing (weight, fragile, sender_type)?",
+            )
+
         # Prepare update data
         update_data = {
-            "status": request.status.value,
+            "status": request.status,  # status is already a string
             "last_updated": datetime.utcnow().isoformat(),
         }
 
@@ -206,9 +219,15 @@ async def update_package(package_uuid: str, request: PackageUpdate):
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update package",
+            detail=f"Failed to update package: {str(e)}",
         )
 
+@router.post(
+    "/{package_uuid}/process",
+    response_model=PackageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Process Package with Structured Signals",
+)
 @router.patch(
     "/{package_uuid}/process",
     response_model=PackageResponse,
@@ -260,6 +279,13 @@ async def process_package(
 
         package = fetch_response.data[0]
         urgency = package.get("urgency")
+
+        # Validate urgency exists before using it for category detection
+        if not urgency:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Package urgency is not set. Cannot detect category without urgency.",
+            )
 
         # Determine ZK verification status
         zk_verified_sender = signals.zk_verified_sender
@@ -332,6 +358,12 @@ async def process_package(
         )
 
 
+@router.post(
+    "/{package_uuid}/category",
+    response_model=PackageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update Package Category and Priority",
+)
 @router.patch(
     "/{package_uuid}/category",
     response_model=PackageResponse,
@@ -375,6 +407,13 @@ async def update_package_category(
 
         package = fetch_response.data[0]
         urgency = package.get("urgency")
+
+        # Validate urgency exists
+        if not urgency:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Package urgency is not set. Cannot compute priority without urgency.",
+            )
 
         # Compute priority label from urgency and new category
         priority_label = PriorityEngine.compute(urgency, request.category.value)

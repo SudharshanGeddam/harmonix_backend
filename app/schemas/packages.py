@@ -52,6 +52,7 @@ class SenderType(str, Enum):
     RETAIL = "retail"
     LUXURY = "luxury"
     WAREHOUSE = "warehouse"
+    BUSINESS = "business"
 
 
 class PackageCreate(BaseModel):
@@ -75,7 +76,11 @@ class PackageCreate(BaseModel):
 
 
 class PackageProcessSignals(BaseModel):
-    """Request model for processing package with structured signals."""
+    """Request model for processing package with structured signals.
+    
+    All fields are optional. At least one field should be provided for meaningful processing.
+    Missing fields will be treated as None.
+    """
 
     weight: Optional[float] = Field(
         None, ge=0, description="Package weight in kg"
@@ -84,20 +89,63 @@ class PackageProcessSignals(BaseModel):
         None, description="Whether package is fragile"
     )
     sender_type: Optional[SenderType] = Field(
-        None, description="Type of sender"
+        None, description="Type of sender (hospital|ngo|govt|retail|luxury|warehouse|business)"
     )
     zk_verified_sender: Optional[bool] = Field(
         None, description="Whether sender is ZK-verified"
     )
     claimed_product_type: Optional[str] = Field(
-        None, description="Claimed product type for ZK verification (not stored)"
+        None, description="Claimed product type for ZK verification (not stored for privacy)"
     )
+    
+    class Config:
+        """Pydantic config for flexible input."""
+        extra = "ignore"  # Ignore extra fields from frontend
+        json_schema_extra = {
+            "examples": [
+                {
+                    "weight": 2.5,
+                    "fragile": True,
+                    "sender_type": "hospital",
+                    "claimed_product_type": "medical_supplies",
+                    "zk_verified_sender": None
+                },
+                {
+                    "weight": 5.0,
+                    "fragile": False,
+                    "sender_type": "ngo"
+                },
+                {
+                    "claimed_product_type": "medicine"
+                }
+            ]
+        }
 
 
 class PackageUpdate(BaseModel):
     """Request model for updating a package."""
 
-    status: PackageStatus = Field(..., description="New package status")
+    status: Optional[str] = Field(None, description="New package status")
+    
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize status value."""
+        if v is None:
+            return None
+        
+        # Convert to lowercase for case-insensitive matching
+        v_lower = str(v).lower().strip()
+        
+        # Map to valid enum values
+        valid_statuses = {"in_transit", "delivered", "delayed"}
+        if v_lower in valid_statuses:
+            return v_lower
+        
+        # If not valid, raise error with helpful message
+        raise ValueError(
+            f"Invalid status '{v}'. Must be one of: {', '.join(valid_statuses)}"
+        )
 
 
 class PackageCategoryUpdate(BaseModel):

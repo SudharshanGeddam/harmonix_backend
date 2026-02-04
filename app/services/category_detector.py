@@ -59,8 +59,8 @@ class CategoryDetector:
         if sender_type == "luxury":
             return "fancy"
 
-        # Rule 4: Retail/warehouse → clothes
-        if sender_type in ["retail", "warehouse"]:
+        # Rule 4: Retail/warehouse/business → clothes
+        if sender_type in ["retail", "warehouse", "business"]:
             return "clothes"
 
         # No category detected
